@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { runAgent } from './agent-loop.js';
 
 async function getIndexInfo() {
   const response = await fetch(`https://api.pinecone.io/indexes/${process.env.PINECONE_INDEX_NAME}`, {
@@ -94,22 +95,35 @@ async function searchSimilar(query, topK = 3) {
   return data.matches.map(match => ({ score: match.score, text: match.metadata.text }));
 }
 
-searchSimilar('De quelle couleur est le chat ?').then(results => {
-  console.log('Résultats trouvés :\n');
-  results.forEach(({ score, text }) => {
-    console.log(`Score: ${score.toFixed(3)} | ${text}`);
+
+const RAG_SYSTEM_PROMPT = `Tu es un assistant qui répond uniquement en te basant sur le contexte fourni.
+Règles strictes :
+1. Si la réponse se trouve dans le contexte, réponds précisément en citant l'information.
+2. Si la réponse N'EST PAS dans le contexte, dis explicitement : "Je ne trouve pas cette information dans le contexte fourni."
+3. N'invente jamais d'information absente du contexte.
+4. Ne fais pas appel à tes connaissances générales.`;
+
+async function ragQuery(question) {
+  console.log(`\n\n--- Question : "${question}" ---\n`);
+  const similarChunks = await searchSimilar(question);
+
+  console.log('Contexte récupéré (avec scores) :\n');
+  similarChunks.forEach(({ score, text }) => {
+    console.log(`  [score: ${score.toFixed(3)}] ${text}`);
   });
-}).catch(console.error);
+
+  const contextBlock = similarChunks.map(c => `- ${c.text} (score: ${c.score.toFixed(3)})`).join('\n');
+  const userMessage = `Question : ${question}\n\nContexte :\n${contextBlock}`;
+
+  const response = await runAgent([], {}, userMessage, undefined, RAG_SYSTEM_PROMPT);
+}
 
 async function main() {
-  await getIndexInfo();
+  // Test 1 : réponse présente dans le corpus
+  await ragQuery('De quelle couleur est le chat ?');
 
-  const text = `le chat est bleu`;
-
-  const chunks = simpleChunk(text);
-  console.log(`${chunks.length} chunks créés`);
-
-  await upsertChunks(chunks);
+  // Test 2 : réponse absente du corpus
+  await ragQuery('Quel est le nom du chien ?');
 }
 
 main().catch(console.error);

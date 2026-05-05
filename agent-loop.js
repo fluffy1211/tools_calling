@@ -11,7 +11,10 @@ export const conversationHistory = [
   { role: 'system', content: 'Tu es un assistant intelligent qui peut répondre à des questions, faire des recherches sur le web, récupérer la météo, et faire des calculs. Utilise les outils à ta disposition pour fournir les meilleures réponses possibles.' }
 ];
 
-export async function runAgent(tools, toolFunctions, userMessage, history = conversationHistory) {
+export async function runAgent(tools, toolFunctions, userMessage, history = conversationHistory, systemPrompt = null) {
+  if (systemPrompt) {
+    history = [{ role: 'system', content: systemPrompt }];
+  }
   history.push({ role: 'user', content: userMessage });
 
   let iterations = 0;
@@ -73,7 +76,7 @@ export async function runAgent(tools, toolFunctions, userMessage, history = conv
   }
 }
 
-while (true) {
-  const input = await question('\nVous : ');
-  await runAgent([], {}, input);
-}
+// while (true) {
+//   const input = await question('\nVous : ');
+//   await runAgent([], {}, input);
+// }
